@@ -9,7 +9,7 @@ now_wita = datetime.now(wita_tz)
 
 st.set_page_config(page_title="VCare Analytics Pro", layout="centered")
 
-# CSS UNTUK MENYAMAKAN LEBAR TOTAL & MENGHILANGKAN MENU
+# CSS UNTUK MENGUNCI LEBAR DAN TAMPILAN CLEAN
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -18,32 +18,33 @@ st.markdown("""
     
     .stApp { background-color: #f1f5f9; }
 
-    /* Container Utama */
+    /* Kotak Utama Screenshot */
     .report-card {
         background-color: white;
         padding: 20px;
         border-radius: 16px;
         box-shadow: 0 10px 25px rgba(0,0,0,0.05);
         margin: 0 auto;
-        max-width: 450px;
+        width: 100%;
+        max-width: 400px; /* Ukuran ideal HP */
+        box-sizing: border-box;
     }
 
-    /* Tabel Styling: Paksa Lebar 100% */
+    /* Tabel: Paksa Lebar 100% dan hilangkan gap bawah */
     .report-table {
         width: 100% !important;
         border-collapse: collapse;
         border-left: 1px solid #e2e8f0;
         border-right: 1px solid #e2e8f0;
         border-top: 1px solid #e2e8f0;
-        border-radius: 10px 10px 0 0;
-        overflow: hidden;
+        margin-bottom: 0 !important; /* Menghilangkan jarak dengan metrik */
     }
     .report-table thead th {
         background: #1e3a8a !important;
         color: white !important;
         padding: 12px 5px !important;
         font-size: 0.75rem;
-        text-align: center;
+        text-transform: uppercase;
     }
     .report-table td {
         padding: 10px 5px !important;
@@ -52,14 +53,13 @@ st.markdown("""
         text-align: center;
     }
 
-    /* Bagian Metrik Biru: Harus menyambung dengan tabel */
+    /* Metrik: Lebar 100% menyatu dengan tabel */
     .metric-container {
         display: flex;
         width: 100%;
         background-color: #1e3a8a;
-        border-radius: 0 0 10px 10px;
+        margin-top: -1px; /* Menghilangkan celah garis */
         margin-bottom: 15px;
-        box-sizing: border-box;
     }
     .metric-box {
         flex: 1;
@@ -68,8 +68,8 @@ st.markdown("""
         border-right: 1px solid rgba(255,255,255,0.1);
     }
     .metric-box:last-child { border-right: none; }
-    .metric-label { font-size: 0.6rem; color: #bfdbfe; text-transform: uppercase; margin-bottom: 4px; }
-    .metric-value { font-size: 1.4rem; font-weight: 800; color: white; margin: 0; }
+    .metric-label { font-size: 0.6rem; color: #bfdbfe; text-transform: uppercase; margin-bottom: 2px; }
+    .metric-value { font-size: 1.4rem; font-weight: 800; color: white; margin: 0; padding: 0; }
 
     /* Badge MVP: Lebar 100% */
     .mvp-badge {
@@ -78,7 +78,7 @@ st.markdown("""
         border: 1px solid #bbf7d0;
         color: #15803d;
         padding: 12px;
-        border-radius: 10px;
+        border-radius: 8px;
         text-align: center;
         font-weight: bold;
         font-size: 0.85rem;
@@ -87,17 +87,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# UI INPUT
+# UI KONTROL
 st.markdown('<h2 style="text-align:center; color:#1e3a8a;">VCare Dashboard</h2>', unsafe_allow_html=True)
 with st.expander("⚙️ Kontrol Laporan", expanded=True):
-    col_a, col_b = st.columns(2)
-    with col_a:
-        selected_date = st.date_input("Pilih Tanggal", now_wita)
-    with col_b:
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_date = st.date_input("Tanggal", now_wita)
+    with col2:
         st.markdown("<br>", unsafe_allow_html=True)
         date_str = selected_date.strftime('%d-%b-%Y')
-        dl_url = f"https://vcare.visionet.co.id/JobHistory/DownloadJobHistory?Type=1&WorkType=2&Account=All&Project=All&Date={date_str}"
-        st.link_button("🔗 Link Excel", dl_url, use_container_width=True)
+        st.link_button("🔗 Link Excel", f"https://vcare.visionet.co.id/JobHistory/DownloadJobHistory?Type=1&WorkType=2&Account=All&Project=All&Date={date_str}", use_container_width=True)
     uploaded_file = st.file_uploader("Upload File", type=["xlsx", "xls"], label_visibility="collapsed")
 
 if uploaded_file:
@@ -111,46 +110,33 @@ if uploaded_file:
             report_df.columns = ['SAE', 'Progres PM']
             report_df = report_df.sort_values(by='SAE')
 
-            # Logika Warna
-            bottom_3_values = report_df[report_df['Progres PM'] > 0]['Progres PM'].nsmallest(3).unique()
+            # Logika Styling
+            bottom_3_vals = report_df[report_df['Progres PM'] > 0]['Progres PM'].nsmallest(3).unique()
             max_val = report_df['Progres PM'].max()
             total_pm = report_df['Progres PM'].sum()
             best_name = report_df.loc[report_df['Progres PM'] == max_val, 'SAE'].iloc[0]
 
-            def get_row_style(val):
-                if val == 0: return 'background-color: #fff1f2; color: #be123c; font-weight: bold;'
-                elif val == max_val and val > 0: return 'background-color: #f0fdf4; color: #15803d; font-weight: bold;'
-                elif val in bottom_3_values: return 'background-color: #ffedd5; color: #9a3412; font-weight: bold;'
-                return ''
-
-            # Membuat baris tabel secara manual untuk kontrol HTML penuh
             rows_html = ""
             for _, row in report_df.iterrows():
-                style = get_row_style(row['Progres PM'])
-                rows_html += f"""
-                <tr style="{style}">
-                    <td>{row['SAE']}</td>
-                    <td>{row['Progres PM']}</td>
-                </tr>"""
+                val = row['Progres PM']
+                style = ""
+                if val == 0: style = "background-color: #fff1f2; color: #be123c; font-weight: bold;"
+                elif val == max_val and val > 0: style = "background-color: #f0fdf4; color: #15803d; font-weight: bold;"
+                elif val in bottom_3_vals: style = "background-color: #ffedd5; color: #9a3412; font-weight: bold;"
+                
+                rows_html += f'<tr style="{style}"><td>{row["SAE"]}</td><td>{val}</td></tr>'
 
-            # --- CONSTRUCT FULL HTML STRING ---
+            # GABUNG SEMUA JADI SATU STRING HTML
             full_report_html = f"""
             <div class="report-card">
-                <div style="text-align:center; color:#1e3a8a; font-weight:800; font-size:1.2rem; margin-bottom:15px;">
+                <div style="text-align:center; color:#1e3a8a; font-weight:800; font-size:1.1rem; margin-bottom:15px;">
                     REKAP PROGRES PM<br>
                     <span style="font-size:0.8rem; font-weight:normal; color:#64748b;">{date_str}</span>
                 </div>
                 
                 <table class="report-table">
-                    <thead>
-                        <tr>
-                            <th>SAE</th>
-                            <th>PROGRES PM</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows_html}
-                    </tbody>
+                    <thead><tr><th>SAE</th><th>PROGRES PM</th></tr></thead>
+                    <tbody>{rows_html}</tbody>
                 </table>
                 
                 <div class="metric-container">
@@ -164,16 +150,14 @@ if uploaded_file:
                     </div>
                 </div>
                 
-                <div class="mvp-badge">
-                    🏆 MVP: {best_name} ({max_val} PM)
-                </div>
+                <div class="mvp-badge">🏆 MVP: {best_name} ({max_val} PM)</div>
             </div>
             """
             
-            # Render satu kali untuk menjamin keseimbangan
+            # TAMPILKAN SEKALIGUS
             st.write(full_report_html, unsafe_allow_html=True)
 
         else:
-            st.error(f"Kolom '{target_col}' tidak ditemukan.")
+            st.error("Kolom 'Engineer' tidak ditemukan.")
     except Exception as e:
         st.error(f"Error: {e}")
