@@ -3,106 +3,131 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-# 1. KONFIGURASI WAKTU & HALAMAN
+# 1. KONFIGURASI HALAMAN & WAKTU
 wita_tz = pytz.timezone('Asia/Makassar')
 now_wita = datetime.now(wita_tz)
 
-st.set_page_config(page_title="Converter Laporan VCare", layout="centered")
+# Layout 'centered' agar lebih fokus di layar HP
+st.set_page_config(page_title="VCare Report Mobile", layout="centered")
 
-# Custom CSS untuk header tabel biru dan teks putih
+# Custom CSS untuk tampilan Mobile-Friendly & Screenshot-Ready
 st.markdown("""
 <style>
+    /* Mengatur padding agar pas di layar HP */
+    .main .block-container {
+        padding: 1rem 0.5rem;
+    }
+    
     .stTitle {
         color: #1E3A8A;
+        font-size: 1.4rem !important;
         text-align: center;
+        margin-bottom: 0.5rem;
     }
+
+    /* Styling Tabel khusus agar index/nomor urut hilang dan font pas */
+    table {
+        width: 100% !important;
+        border-collapse: collapse;
+        font-size: 0.8rem; /* Font diperkecil sedikit agar tidak terpotong di HP */
+        font-family: sans-serif;
+    }
+
     thead th {
         background-color: #1E3A8A !important;
         color: white !important;
         font-weight: bold !important;
         text-align: center !important;
+        padding: 8px 4px !important;
+    }
+
+    td {
+        padding: 6px 4px !important;
+        text-align: center !important;
+        border-bottom: 1px solid #eeeeee;
+    }
+
+    /* Menghilangkan margin berlebih pada box metrik */
+    [data-testid="stMetric"] {
+        background-color: #f8fafc;
+        padding: 8px;
+        border-radius: 8px;
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 VCare Excel to Report Converter")
+st.title("📊 VCare Mobile Report")
 
 # 2. SIDEBAR
-st.sidebar.header("Pengaturan Data")
-selected_date = st.sidebar.date_input("Pilih Tanggal Laporan", now_wita)
+st.sidebar.header("Opsi")
+selected_date = st.sidebar.date_input("Pilih Tanggal", now_wita)
 date_str = selected_date.strftime('%d-%b-%Y')
 
 download_url = f"https://vcare.visionet.co.id/JobHistory/DownloadJobHistory?Type=1&WorkType=2&Account=All&Project=All&Date={date_str}"
-st.sidebar.markdown(f"**🔗 [Klik Download File VCare]({download_url})**")
+st.sidebar.markdown(f"**[🔗 Download File VCare]({download_url})**")
 
 # 3. PROSES FILE
-uploaded_file = st.file_uploader("Upload file Excel VCare", type=["xlsx", "xls"])
+uploaded_file = st.file_uploader("Upload Excel VCare", type=["xlsx", "xls"])
 
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file)
         df.columns = df.columns.str.strip()
 
-        target_column = 'Engineer'
-
-        if target_column in df.columns:
-            # Hitung Progres
-            report_df = df[target_column].value_counts().reset_index()
+        target_col = 'Engineer'
+        if target_col in df.columns:
+            # Olah Data
+            report_df = df[target_col].value_counts().reset_index()
             report_df.columns = ['SAE', 'Progres PM']
             report_df = report_df.sort_values(by='SAE')
 
-            # TAMBAHKAN KOLOM TARGET MINIMAL (Sesuai permintaan Anda)
-            report_df['Minimal Target'] = 30
-            
-            # Statistik untuk warna
             max_val = report_df['Progres PM'].max()
             total_pm = report_df['Progres PM'].sum()
 
-            st.markdown(f"### Rekap Progres PM - <span style='color:#1E3A8A;'>{date_str}</span>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align:center; font-weight:bold; margin-bottom:5px;'>Rekap PM: {date_str}</p>", unsafe_allow_html=True)
 
             # Fungsi Styling
             def style_row(row):
                 val = row['Progres PM']
-                bg_color = ''
-                text_color = 'black'
+                bg, txt, weight = '', 'black', 'normal'
                 
                 if val == 0:
-                    bg_color = '#f1948a' # Merah
-                    text_color = 'white'
+                    bg, txt, weight = '#f1948a', 'white', 'bold' # Merah
                 elif val == max_val and val > 0:
-                    bg_color = '#2ecc71' # Hijau
-                    text_color = 'white'
-                elif val <= 2 and val > 0:
-                    bg_color = '#fff3cd' # Kuning
+                    bg, txt, weight = '#2ecc71', 'white', 'bold' # Hijau
+                elif 0 < val <= 2:
+                    bg = '#fff3cd' # Kuning
                 
-                return [f'background-color: {bg_color}; color: {text_color};'] * len(row)
+                return [f'background-color: {bg}; color: {txt}; font-weight: {weight}'] * len(row)
 
-            # Terapkan Style
+            # Terapkan Styling
             styled_df = report_df.style.apply(style_row, axis=1)
-
-            # HILANGKAN NOMOR URUT (INDEX)
-            # Menggunakan proteksi agar tidak error di berbagai versi pandas
+            
+            # PROTEKSI: Sembunyikan index di objek styler
             if hasattr(styled_df, 'hide'):
-                styled_df.hide(axis='index') # Versi baru
+                styled_df.hide()
             else:
-                styled_df.hide_index() # Versi lama
+                styled_df.hide_index()
 
-            # Tampilkan Tabel (Hanya SAE, Progres PM, dan Minimal Target)
-            st.table(styled_df)
+            # RENDER TOTAL: Paksa index=False dalam konversi HTML
+            st.write(styled_df.to_html(index=False), unsafe_allow_html=True)
 
-            # METRICS
-            st.markdown("---")
+            # 4. METRIK RINGKASAN
+            st.write("")
             c1, c2 = st.columns(2)
             with c1:
-                st.metric("✅ Total PM Berhasil", total_pm)
+                st.metric("Total PM", total_pm)
             with c2:
-                target_total = 30
-                st.metric("🎯 Target Kumulatif", target_total, delta=int(total_pm) - target_total)
+                target = 30
+                diff = int(total_pm) - target
+                st.metric("Target", target, delta=f"{diff}")
+
+            st.success(f"🏆 **Terbaik:** {report_df.loc[report_df['Progres PM'] == max_val, 'SAE'].iloc[0]} ({max_val} PM)")
 
         else:
-            st.error(f"Kolom '{target_column}' tidak ditemukan.")
-
+            st.error(f"Kolom '{target_col}' tidak ditemukan!")
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Terjadi kesalahan: {e}")
 else:
-    st.info("Silakan unggah file Excel.")
+    st.info("Silakan upload file Excel.")
