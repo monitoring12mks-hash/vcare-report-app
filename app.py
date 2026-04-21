@@ -9,10 +9,10 @@ now_wita = datetime.now(wita_tz)
 
 st.set_page_config(page_title="VCare Analytics Pro", layout="centered")
 
-# 2. CSS UNTUK DASHBOARD SIMETRIS & CLEAN (MENGHILANGKAN MENU GITHUB/SHARE)
+# 2. CSS UNTUK TAMPILAN VISUAL & KESEIMBANGAN LEBAR
 st.markdown("""
 <style>
-    /* Menyembunyikan elemen bawaan Streamlit agar screenshot bersih */
+    /* Menghilangkan elemen menu Streamlit agar screenshot bersih */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
@@ -28,7 +28,7 @@ st.markdown("""
         box-shadow: 0 10px 25px rgba(0,0,0,0.05);
         margin: 0 auto;
         width: 100%;
-        max-width: 450px; /* Lebar optimal screenshot HP */
+        max-width: 450px; /* Lebar optimal untuk screenshot HP */
         box-sizing: border-box;
     }
 
@@ -55,7 +55,7 @@ st.markdown("""
         text-align: center;
     }
 
-    /* Kotak Metrik Biru: Melekat sempurna di bawah tabel */
+    /* Kotak Metrik Biru: Harus menyatu (sama lebar) dengan tabel */
     .metric-container {
         display: flex;
         width: 100%;
@@ -90,22 +90,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. KONTROL HALAMAN DEPAN (TIDAK MASUK SCREENSHOT)
-st.markdown('<h2 style="text-align:center; color:#1e3a8a; margin-bottom:20px;">📊 VCare Dashboard</h2>', unsafe_allow_html=True)
+# 3. KONTROL UTAMA (Tampil di atas, tidak masuk screenshot dashboard)
+st.markdown('<h2 style="text-align:center; color:#1e3a8a;">📊 VCare Dashboard</h2>', unsafe_allow_html=True)
 
+# Container kontrol agar tetap rapi
 with st.container():
-    col1, col2 = st.columns([1,1])
-    with col1:
-        selected_date = st.date_input("Pilih Tanggal Laporan", now_wita)
-    with col2:
+    c1, c2 = st.columns(2)
+    with c1:
+        selected_date = st.date_input("Tanggal Laporan", now_wita)
+    with c2:
         date_str = selected_date.strftime('%d-%b-%Y')
-        download_url = f"https://vcare.visionet.co.id/JobHistory/DownloadJobHistory?Type=1&WorkType=2&Account=All&Project=All&Date={date_str}"
+        dl_url = f"https://vcare.visionet.co.id/JobHistory/DownloadJobHistory?Type=1&WorkType=2&Account=All&Project=All&Date={date_str}"
         st.markdown("<br>", unsafe_allow_html=True)
-        st.link_button("📥 Link Download", download_url, use_container_width=True)
+        st.link_button("📥 Link Download", dl_url, use_container_width=True)
 
-    uploaded_file = st.file_uploader("Upload File Excel VCare", type=["xlsx", "xls"])
+    uploaded_file = st.file_uploader("Upload Excel VCare", type=["xlsx", "xls"])
 
-# 4. PENGOLAHAN DATA & RENDER LAPORAN
+# 4. PENGOLAHAN DATA & RENDER VISUAL
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file)
@@ -113,7 +114,7 @@ if uploaded_file:
         target_col = 'Engineer'
 
         if target_col in df.columns:
-            # Kalkulasi Data
+            # Hitung data
             report_df = df[target_col].value_counts().reset_index()
             report_df.columns = ['SAE', 'Progres PM']
             report_df = report_df.sort_values(by='SAE')
@@ -122,25 +123,25 @@ if uploaded_file:
             max_val = report_df['Progres PM'].max()
             best_name = report_df.loc[report_df['Progres PM'] == max_val, 'SAE'].iloc[0]
             
-            # Cari 3 Terendah (selain angka 0)
+            # Logika 3 Terendah (selain angka 0)
             bottom_3_vals = report_df[report_df['Progres PM'] > 0]['Progres PM'].nsmallest(3).unique()
 
-            # Buat Baris Tabel HTML
+            # Buat baris tabel secara manual
             rows_html = ""
             for _, row in report_df.iterrows():
                 val = row['Progres PM']
-                style = ""
+                bg_style = ""
                 if val == 0:
-                    style = "background-color: #fff1f2; color: #be123c; font-weight: bold;"
+                    bg_style = "background-color: #fff1f2; color: #be123c; font-weight: bold;"
                 elif val == max_val and val > 0:
-                    style = "background-color: #f0fdf4; color: #15803d; font-weight: bold;"
+                    bg_style = "background-color: #f0fdf4; color: #15803d; font-weight: bold;"
                 elif val in bottom_3_vals:
-                    style = "background-color: #ffedd5; color: #9a3412; font-weight: bold;"
+                    bg_style = "background-color: #ffedd5; color: #9a3412; font-weight: bold;"
                 
-                rows_html += f'<tr style="{style}"><td>{row["SAE"]}</td><td>{val}</td></tr>'
+                rows_html += f'<tr style="{bg_style}"><td>{row["SAE"]}</td><td>{val}</td></tr>'
 
-            # GABUNG SEMUA KE DALAM SATU BLOK HTML (AGAR SIMETRIS)
-            final_dashboard_html = f"""
+            # --- GABUNG JADI SATU BLOK VISUAL ---
+            dashboard_visual = f"""
             <div class="report-card">
                 <div style="text-align:center; color:#1e3a8a; font-weight:800; font-size:1.2rem; margin-bottom:15px;">
                     REKAP PROGRES PM<br>
@@ -167,12 +168,12 @@ if uploaded_file:
             </div>
             """
             
-            # RENDER VISUAL (Bukan Teks)
-            st.markdown(final_dashboard_html, unsafe_allow_html=True)
+            # RENDER VISUAL MENGGUNAKAN MARKDOWN
+            st.markdown(dashboard_visual, unsafe_allow_html=True)
 
         else:
-            st.error(f"Kolom '{target_col}' tidak ditemukan di file Excel.")
+            st.error(f"Kolom '{target_col}' tidak ditemukan.")
     except Exception as e:
-        st.error(f"Terjadi kesalahan: {e}")
+        st.error(f"Error: {e}")
 else:
-    st.info("Silakan unggah file Excel untuk melihat laporan.")
+    st.info("Silakan unggah file Excel untuk melihat dashboard.")
