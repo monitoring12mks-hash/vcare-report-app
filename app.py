@@ -9,7 +9,7 @@ now_wita = datetime.now(wita_tz)
 
 st.set_page_config(page_title="VCare Analytics Pro", layout="centered")
 
-# CSS UNTUK KESEIMBANGAN TOTAL (LEBAR SERAGAM)
+# CSS UNTUK MENYAMAKAN LEBAR TOTAL & MENGHILANGKAN MENU
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -18,29 +18,23 @@ st.markdown("""
     
     .stApp { background-color: #f1f5f9; }
 
-    /* Kontainer Utama */
+    /* Container Utama */
     .report-card {
         background-color: white;
         padding: 20px;
         border-radius: 16px;
         box-shadow: 0 10px 25px rgba(0,0,0,0.05);
         margin: 0 auto;
-        max-width: 450px; /* Lebar pas untuk layar HP */
+        max-width: 450px;
     }
 
-    .report-title {
-        color: #1e3a8a;
-        font-size: 1.3rem;
-        font-weight: 800;
-        text-align: center;
-        margin-bottom: 15px;
-    }
-
-    /* TABEL: Paksa Lebar 100% */
+    /* Tabel Styling: Paksa Lebar 100% */
     .report-table {
         width: 100% !important;
         border-collapse: collapse;
-        border: 1px solid #e2e8f0;
+        border-left: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
+        border-top: 1px solid #e2e8f0;
         border-radius: 10px 10px 0 0;
         overflow: hidden;
     }
@@ -49,6 +43,7 @@ st.markdown("""
         color: white !important;
         padding: 12px 5px !important;
         font-size: 0.75rem;
+        text-align: center;
     }
     .report-table td {
         padding: 10px 5px !important;
@@ -57,12 +52,12 @@ st.markdown("""
         text-align: center;
     }
 
-    /* METRIK: Paksa Lebar 100% Sejajar dengan Tabel */
-    .metric-section {
+    /* Bagian Metrik Biru: Harus menyambung dengan tabel */
+    .metric-container {
         display: flex;
         width: 100%;
         background-color: #1e3a8a;
-        border-radius: 0 0 10px 10px; /* Melengkung di bawah saja */
+        border-radius: 0 0 10px 10px;
         margin-bottom: 15px;
         box-sizing: border-box;
     }
@@ -73,10 +68,10 @@ st.markdown("""
         border-right: 1px solid rgba(255,255,255,0.1);
     }
     .metric-box:last-child { border-right: none; }
-    .metric-label { font-size: 0.65rem; color: #bfdbfe; text-transform: uppercase; margin-bottom: 4px; }
-    .metric-value { font-size: 1.4rem; font-weight: 800; color: white; }
+    .metric-label { font-size: 0.6rem; color: #bfdbfe; text-transform: uppercase; margin-bottom: 4px; }
+    .metric-value { font-size: 1.4rem; font-weight: 800; color: white; margin: 0; }
 
-    /* MVP: Paksa Lebar 100% */
+    /* Badge MVP: Lebar 100% */
     .mvp-badge {
         width: 100%;
         background: #f0fdf4;
@@ -87,13 +82,13 @@ st.markdown("""
         text-align: center;
         font-weight: bold;
         font-size: 0.85rem;
-        box-sizing: border-box; /* Agar padding tidak merusak lebar */
+        box-sizing: border-box;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# UI INPUT (Di luar container screenshot)
-st.markdown('<h2 style="text-align:center; color:#1e3a8a;">VCare Analytics</h2>', unsafe_allow_html=True)
+# UI INPUT
+st.markdown('<h2 style="text-align:center; color:#1e3a8a;">VCare Dashboard</h2>', unsafe_allow_html=True)
 with st.expander("⚙️ Kontrol Laporan", expanded=True):
     col_a, col_b = st.columns(2)
     with col_a:
@@ -116,55 +111,67 @@ if uploaded_file:
             report_df.columns = ['SAE', 'Progres PM']
             report_df = report_df.sort_values(by='SAE')
 
-            # Logika 3 Terendah (selain 0)
+            # Logika Warna
             bottom_3_values = report_df[report_df['Progres PM'] > 0]['Progres PM'].nsmallest(3).unique()
-            
             max_val = report_df['Progres PM'].max()
             total_pm = report_df['Progres PM'].sum()
             best_name = report_df.loc[report_df['Progres PM'] == max_val, 'SAE'].iloc[0]
 
-            def style_row(row):
-                val = row['Progres PM']
-                if val == 0: return ['background-color: #fff1f2; color: #be123c; font-weight: bold;'] * len(row)
-                elif val == max_val and val > 0: return ['background-color: #f0fdf4; color: #15803d; font-weight: bold;'] * len(row)
-                elif val in bottom_3_values: return ['background-color: #ffedd5; color: #9a3412; font-weight: bold;'] * len(row)
-                return [''] * len(row)
+            def get_row_style(val):
+                if val == 0: return 'background-color: #fff1f2; color: #be123c; font-weight: bold;'
+                elif val == max_val and val > 0: return 'background-color: #f0fdf4; color: #15803d; font-weight: bold;'
+                elif val in bottom_3_values: return 'background-color: #ffedd5; color: #9a3412; font-weight: bold;'
+                return ''
 
-            styled_df = report_df.style.apply(style_row, axis=1)
-            if hasattr(styled_df, 'hide'): styled_df.hide()
-            else: styled_df.hide_index()
+            # Membuat baris tabel secara manual untuk kontrol HTML penuh
+            rows_html = ""
+            for _, row in report_df.iterrows():
+                style = get_row_style(row['Progres PM'])
+                rows_html += f"""
+                <tr style="{style}">
+                    <td>{row['SAE']}</td>
+                    <td>{row['Progres PM']}</td>
+                </tr>"""
 
-            # --- START SCREENSHOT CONTAINER ---
-            st.markdown('<div class="report-card">', unsafe_allow_html=True)
-            
-            st.markdown(f'<div class="report-title">REKAP PROGRES PM<br><span style="font-size:0.8rem; font-weight:normal; color:#64748b;">{date_str}</span></div>', unsafe_allow_html=True)
-            
-            # 1. TABEL
-            st.write(styled_df.to_html(index=False, classes='report-table'), unsafe_allow_html=True)
-
-            # 2. METRIK (MENYATU DENGAN TABEL)
-            st.markdown(f"""
-                <div class="metric-section">
+            # --- CONSTRUCT FULL HTML STRING ---
+            full_report_html = f"""
+            <div class="report-card">
+                <div style="text-align:center; color:#1e3a8a; font-weight:800; font-size:1.2rem; margin-bottom:15px;">
+                    REKAP PROGRES PM<br>
+                    <span style="font-size:0.8rem; font-weight:normal; color:#64748b;">{date_str}</span>
+                </div>
+                
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>SAE</th>
+                            <th>PROGRES PM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                    </tbody>
+                </table>
+                
+                <div class="metric-container">
                     <div class="metric-box">
                         <div class="metric-label">Total Progress</div>
-                        <div class="metric-value">{total_pm}</div>
+                        <p class="metric-value">{total_pm}</p>
                     </div>
                     <div class="metric-box">
                         <div class="metric-label">Minimal Target</div>
-                        <div class="metric-value">30</div>
+                        <p class="metric-value">30</p>
                     </div>
                 </div>
-            """, unsafe_allow_html=True)
-
-            # 3. MVP BADGE
-            st.markdown(f"""
+                
                 <div class="mvp-badge">
                     🏆 MVP: {best_name} ({max_val} PM)
                 </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown('</div>', unsafe_allow_html=True)
-            # --- END SCREENSHOT CONTAINER ---
+            </div>
+            """
+            
+            # Render satu kali untuk menjamin keseimbangan
+            st.write(full_report_html, unsafe_allow_html=True)
 
         else:
             st.error(f"Kolom '{target_col}' tidak ditemukan.")
