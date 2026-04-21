@@ -59,19 +59,19 @@ if uploaded_file:
                 return f'background-color: {color}'
 
             # Menampilkan tabel
-            st.table(report_df.style.applymap(highlight_zero, subset=['Progres PM']))
-            
-            # Ringkasan Target
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Total PM Saat Ini", total_pm)
-            with col2:
-                target_min = 30
-                selisih = int(total_pm) - target_min
-                st.metric("Minimal Target", target_min, delta=selisih)
-                
-        else:
-            st.error(f"Kolom '{target_column}' tidak ditemukan. Kolom yang tersedia adalah: {', '.join(df.columns)}")
+           # Styling Tabel: Warna merah untuk progres 0
+            def highlight_zero(val):
+                color = '#f1948a' if val == 0 else ''
+                return f'background-color: {color}'
+
+            # Menggunakan .map() untuk Pandas versi terbaru, atau .applymap() untuk versi lama
+            if hasattr(report_df.style, 'map'):
+                styled_df = report_df.style.map(highlight_zero, subset=['Progres PM'])
+            else:
+                styled_df = report_df.style.applymap(highlight_zero, subset=['Progres PM'])
+
+            # Menampilkan tabel
+            st.table(styled_df)
             
     except Exception as e:
         st.error(f"Terjadi kesalahan saat membaca file: {e}")
