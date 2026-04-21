@@ -22,45 +22,59 @@ date_str = selected_date.strftime('%d-%b-%Y')
 download_url = f"https://vcare.visionet.co.id/JobHistory/DownloadJobHistory?Type=1&WorkType=2&Account=All&Project=All&Date={date_str}"
 
 st.sidebar.markdown(f"[🔗 Klik untuk Download File VCare]({download_url})")
-st.sidebar.info("Catatan: Pastikan Anda sudah login ke VCare di browser ini sebelum klik link di atas.")
+st.sidebar.info("Catatan: Pastikan Anda sudah login ke VCare di browser sebelum mengunduh.")
 
 # --- Bagian Upload ---
 uploaded_file = st.file_uploader("Upload file Excel yang sudah didownload", type=["xlsx", "xls"])
 
 if uploaded_file:
-    # Membaca Data
-    df = pd.read_excel(uploaded_file)
-    
-    # Logika Pemrosesan (Asumsi kolom bernama 'SAE' dan 'Status' atau sejenisnya)
-    # Anda mungkin perlu menyesuaikan nama kolom sesuai isi file Excel asli
-    if 'SAE' in df.columns:
-        # Menghitung progress per SAE
-        report_df = df.groupby('SAE').size().reset_index(name='Progres PM')
+    try:
+        # Membaca Data
+        df = pd.read_excel(uploaded_file)
         
-        # Total baris
-        total_pm = report_df['Progres PM'].sum()
-        
-        # Menampilkan Tabel ala Laporan
-        st.subheader(f"Rekap Progres PM - {date_str}")
-        
-        # Styling Tabel
-        def highlight_zero(val):
-            color = '#f1948a' if val == 0 else 'white'
-            return f'background-color: {color}'
+        # Membersihkan spasi pada nama kolom jika ada
+        df.columns = df.columns.str.strip()
 
-        # Menambahkan baris Total di akhir
-        # (Untuk tampilan web, kita gunakan dataframe styling)
-        st.table(report_df.style.applymap(highlight_zero, subset=['Progres PM']))
-        
-        # Ringkasan Target
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total PM Saat Ini", total_pm)
-        with col2:
-            st.metric("Minimal Target", "30", delta=int(total_pm) - 30)
+        # Menggunakan kolom 'Engineer' sesuai struktur file Anda
+        target_column = 'Engineer'
+
+        if target_column in df.columns:
+            # Menghitung progress per Engineer
+            # Menggunakan value_counts agar mendapatkan daftar semua nama dan jumlah barisnya
+            report_df = df[target_column].value_counts().reset_index()
+            report_df.columns = ['SAE', 'Progres PM'] # Menamai kolom hasil agar sesuai gambar
             
-    else:
-        st.error("Kolom 'SAE' tidak ditemukan dalam file. Pastikan file benar.")
+            # Mengurutkan berdasarkan nama secara alfabetis
+            report_df = report_df.sort_values(by='SAE')
+            
+            # Total baris
+            total_pm = report_df['Progres PM'].sum()
+            
+            # Menampilkan Tabel ala Laporan
+            st.subheader(f"Rekap Progres PM - {date_str}")
+            
+            # Styling Tabel: Warna merah untuk progres 0
+            def highlight_zero(val):
+                color = '#f1948a' if val == 0 else 'white'
+                return f'background-color: {color}'
+
+            # Menampilkan tabel
+            st.table(report_df.style.applymap(highlight_zero, subset=['Progres PM']))
+            
+            # Ringkasan Target
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total PM Saat Ini", total_pm)
+            with col2:
+                target_min = 30
+                selisih = int(total_pm) - target_min
+                st.metric("Minimal Target", target_min, delta=selisih)
+                
+        else:
+            st.error(f"Kolom '{target_column}' tidak ditemukan. Kolom yang tersedia adalah: {', '.join(df.columns)}")
+            
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat membaca file: {e}")
 
 else:
-    st.write("Silakan download file dari VCare menggunakan link di samping, lalu upload ke sini.")
+    st.info("Silakan download file dari VCare terlebih dahulu, lalu upload di sini untuk membuat laporan.")
