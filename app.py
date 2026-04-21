@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 import io
+import urllib.parse
 from PIL import Image, ImageDraw, ImageFont
 
 # ── KONFIGURASI ──────────────────────────────────────────────────────────────
@@ -11,35 +12,44 @@ st.markdown("""
 <style>
     #MainMenu {visibility:hidden;} header {visibility:hidden;} footer {visibility:hidden;}
     .stApp {background-color:#f1f5f9;}
+    .stDownloadButton > button {
+        background-color:#1e3a8a; color:white;
+        border-radius:8px; border:none; width:100%;
+    }
 </style>""", unsafe_allow_html=True)
 
-# ── FONT (tanpa file eksternal, aman untuk Streamlit Cloud) ──────────────────
+# ── MASTER LIST ENGINEER ──────────────────────────────────────────────────────
+MASTER_ENGINEERS = [
+    "Andi Imran",
+    "Andi Muhammad Shaleh",
+    "Didi Setiawan",
+    "M. Syahrial Saeni",
+    "Muh Faris Aprillah Ridwan",
+    "Muh. Al-Ghifari",
+    "Muhammad Nurhadi Santoso",
+    "Muhammad Yadi Ahdiat Tauhid",
+    "Mus Muliadi",
+    "Suardi M",
+    "Warman Munti",
+    "Zulfadly",
+]
+
+# ── FONT ─────────────────────────────────────────────────────────────────────
 def fnt(size, bold=False):
-    """
-    Coba load font sistem dulu, fallback ke built-in Pillow.
-    Urutan: font sistem Linux → font sistem Windows/Mac → Pillow default
-    """
-    candidates_bold = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-        "C:/Windows/Fonts/arialbd.ttf",
-        "/Library/Fonts/Arial Bold.ttf",
-    ]
-    candidates_reg = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "/Library/Fonts/Arial.ttf",
-    ]
-    candidates = candidates_bold if bold else candidates_reg
+    candidates = (
+        ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+         "C:/Windows/Fonts/arialbd.ttf", "/Library/Fonts/Arial Bold.ttf"]
+        if bold else
+        ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+         "C:/Windows/Fonts/arial.ttf", "/Library/Fonts/Arial.ttf"]
+    )
     for path in candidates:
         try:
             return ImageFont.truetype(path, size)
         except Exception:
             continue
-    # Fallback: built-in Pillow (Pillow >= 10.0.0 support size parameter)
     try:
         return ImageFont.load_default(size=size)
     except TypeError:
@@ -77,7 +87,6 @@ def generate_image(counts, total_pm, max_pm, mvp_name, date_str):
     img  = Image.new("RGB", (W, total_h), C_LIGHT)
     draw = ImageDraw.Draw(img)
 
-    # Card
     draw.rounded_rectangle(
         [PADDING, PADDING, W - PADDING, total_h - PADDING],
         radius=16, fill=C_WHITE, outline=C_BORDER, width=1
@@ -90,18 +99,16 @@ def generate_image(counts, total_pm, max_pm, mvp_name, date_str):
     tw = draw.textlength(title, font=fnt(17, bold=True))
     draw.text(((W - tw) / 2, y), title, font=fnt(17, bold=True), fill=C_NAVY)
     y += 28
-
     dw = draw.textlength(date_str, font=fnt(12))
     draw.text(((W - dw) / 2, y), date_str, font=fnt(12), fill=C_GRAY)
     y += 30
 
-    # Tabel
-    col1_x  = PADDING + 12
-    col_w2  = int((W - PADDING * 2) * 0.28)
-    tbl_x1  = PADDING
-    tbl_x2  = W - PADDING
+    col1_x = PADDING + 12
+    col_w2 = int((W - PADDING * 2) * 0.28)
+    tbl_x1 = PADDING
+    tbl_x2 = W - PADDING
 
-    # Header
+    # Header tabel
     draw.rectangle([tbl_x1, y, tbl_x2, y + HEADER_H], fill=C_NAVY)
     draw.text((col1_x, y + 16), "SAE", font=fnt(11, bold=True), fill=C_WHITE)
     ph = "PROGRES"
@@ -110,10 +117,8 @@ def generate_image(counts, total_pm, max_pm, mvp_name, date_str):
               ph, font=fnt(11, bold=True), fill=C_WHITE)
     y += HEADER_H
 
-    # Bottom 3
     bottom_3 = set(counts[counts['Progres'] > 0]['Progres'].nsmallest(3).unique())
 
-    # Baris data
     for _, row in counts.iterrows():
         val  = int(row['Progres'])
         name = str(row['SAE'])
@@ -166,10 +171,45 @@ def generate_image(counts, total_pm, max_pm, mvp_name, date_str):
     pw2      = draw.textlength(prefix, font=fnt(14, bold=True))
     mw       = draw.textlength(mvp_text, font=fnt(14, bold=True))
     start_x  = (W - pw2 - mw) / 2
-    draw.text((start_x, y + 17), prefix,   font=fnt(14, bold=True), fill=C_GREEN_T)
+    draw.text((start_x, y + 17), prefix,        font=fnt(14, bold=True), fill=C_GREEN_T)
     draw.text((start_x + pw2, y + 17), mvp_text, font=fnt(14, bold=True), fill=C_GREEN_T)
 
     return img
+
+# ── BUAT TEKS WHATSAPP ────────────────────────────────────────────────────────
+def build_wa_text(counts, total_pm, max_pm, mvp_name, date_str):
+    TARGET = 30
+    lines = []
+    lines.append(f"📊 *REKAP PROGRES PM*")
+    lines.append(f"📅 {date_str}")
+    lines.append("━" * 28)
+
+    bottom_3 = set(counts[counts['Progres'] > 0]['Progres'].nsmallest(3).unique())
+
+    for _, row in counts.iterrows():
+        val  = int(row['Progres'])
+        name = str(row['SAE'])
+
+        if val == 0:
+            icon = "🔴"
+        elif val == max_pm and val > 0:
+            icon = "🏆"
+        elif val in bottom_3:
+            icon = "🟠"
+        else:
+            icon = "🟢"
+
+        lines.append(f"{icon} {name}: *{val} PM*")
+
+    lines.append("━" * 28)
+    status = "✅ TERCAPAI" if total_pm >= TARGET else "❌ BELUM TERCAPAI"
+    lines.append(f"📦 Total Progress : *{total_pm} PM*")
+    lines.append(f"🎯 Minimal Target : *{TARGET} PM* {status}")
+    lines.append("━" * 28)
+    lines.append(f"🏆 MVP: *{mvp_name}* ({max_pm} PM)")
+    lines.append("")
+    lines.append("_Generated by VCare Analytics_")
+    return "\n".join(lines)
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 wita_tz  = pytz.timezone('Asia/Makassar')
@@ -188,9 +228,9 @@ with c2:
     )
     st.markdown(
         f'<br><a href="{dl_url}" target="_blank">'
-        f'<button style="width:100%;height:40px;border-radius:5px;'
-        f'background-color:#1e3a8a;color:white;border:none;cursor:pointer;">'
-        f'Download Excel</button></a>',
+        f'<button style="width:100%;height:40px;border-radius:8px;'
+        f'background-color:#1e3a8a;color:white;border:none;cursor:pointer;font-size:14px;">'
+        f'📥 Download Excel</button></a>',
         unsafe_allow_html=True
     )
 
@@ -202,9 +242,15 @@ if uploaded_file:
         df.columns = df.columns.str.strip()
 
         if 'Engineer' in df.columns:
-            counts  = df['Engineer'].value_counts().reset_index()
-            counts.columns = ['SAE', 'Progres']
-            counts  = counts.sort_values(by='SAE').reset_index(drop=True)
+            # Hitung progres dari file
+            raw_counts = df['Engineer'].value_counts().reset_index()
+            raw_counts.columns = ['SAE', 'Progres']
+
+            # Gabung dengan master list — engineer tidak ada di file = 0
+            master_df = pd.DataFrame({'SAE': MASTER_ENGINEERS})
+            counts = master_df.merge(raw_counts, on='SAE', how='left')
+            counts['Progres'] = counts['Progres'].fillna(0).astype(int)
+            counts = counts.sort_values(by='SAE').reset_index(drop=True)
 
             total_pm = int(counts['Progres'].sum())
             max_pm   = int(counts['Progres'].max())
@@ -215,17 +261,42 @@ if uploaded_file:
 
             st.image(img, use_container_width=True)
 
-            buf = io.BytesIO()
-            img.save(buf, format="PNG", dpi=(300, 300))
-            buf.seek(0)
+            # Teks untuk WhatsApp
+            wa_text = build_wa_text(counts, total_pm, max_pm, mvp_name, date_str)
 
-            st.download_button(
-                label="📸 Download Gambar untuk WhatsApp",
-                data=buf,
-                file_name=f"rekap_pm_{date_str}.png",
-                mime="image/png",
-                use_container_width=True
-            )
+            # ── TOMBOL AKSI ──
+            st.markdown("---")
+            col_a, col_b = st.columns(2)
+
+            # Tombol Download Gambar
+            with col_a:
+                buf = io.BytesIO()
+                img.save(buf, format="PNG", dpi=(300, 300))
+                buf.seek(0)
+                st.download_button(
+                    label="📸 Download Gambar",
+                    data=buf,
+                    file_name=f"rekap_pm_{date_str}.png",
+                    mime="image/png",
+                    use_container_width=True
+                )
+
+            # Tombol Share Teks ke WhatsApp
+            with col_b:
+                encoded_text = urllib.parse.quote(wa_text)
+                wa_url = f"https://wa.me/?text={encoded_text}"
+                st.markdown(
+                    f'<a href="{wa_url}" target="_blank">'
+                    f'<button style="width:100%;height:40px;border-radius:8px;'
+                    f'background-color:#25D366;color:white;border:none;'
+                    f'cursor:pointer;font-size:14px;font-weight:bold;">'
+                    f'💬 Share ke WhatsApp</button></a>',
+                    unsafe_allow_html=True
+                )
+
+            # Preview teks WA
+            with st.expander("👁️ Preview teks WhatsApp"):
+                st.code(wa_text, language=None)
 
         else:
             st.error("❌ Kolom 'Engineer' tidak ditemukan dalam file.")
