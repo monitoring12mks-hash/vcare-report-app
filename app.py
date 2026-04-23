@@ -181,7 +181,7 @@ def build_wa_text(counts, total_pm, max_pm, mvp_name, date_str):
     TARGET = 30
     lines = []
     lines.append(f"📊 *REKAP PROGRES PM*")
-    lines.append(f"📅 {date_str}")
+    lines.append(f"🗓️ {date_str}")
     lines.append("━" * 28)
 
     bottom_3 = set(counts[counts['Progres'] > 0]['Progres'].nsmallest(3).unique())
